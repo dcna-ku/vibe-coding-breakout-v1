@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>벽돌깨기 대모험</title>
+    <!-- Tailwind CSS for modern, high-contrast UI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter & Jua for friendly Korean arcade feel -->
+    <link href="https://fonts.googleapis.com/css2?family=Jua&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Jua', 'Inter', sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #311042 100%);
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .arcade-shadow {
+            text-shadow: 3px 3px 0px #000, -2px -2px 0px #000, 2px -2px 0px #000, -2px 2px 0px #000, 4px 4px 10px rgba(0,0,0,0.6);
+        }
+        .box-glow {
+            box-shadow: 0 0 25px rgba(99, 102, 241, 0.5), inset 0 0 15px rgba(99, 102, 241, 0.2);
+        }
+        canvas {
+            touch-action: none;
+        }
+    </style>
+</head>
+<body class="min-h-screen text-white flex flex-col items-center justify-between p-4 lg:p-6 overflow-x-hidden">
+
+    <!-- Top Header / Scoreboard -->
+    <header class="w-full max-w-6xl bg-slate-900/80 backdrop-blur-md border border-indigo-500/30 rounded-2xl p-4 lg:p-6 flex flex-wrap items-center justify-between gap-4 box-glow">
+        <div class="flex items-center space-x-3">
+            <span class="text-3xl lg:text-4xl">🧱</span>
+            <h1 class="text-2xl lg:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-indigo-300 to-pink-400 arcade-shadow">
+                벽돌깨기 대모험
+            </h1>
+        </div>
+
+        <div class="flex items-center space-x-6 lg:space-x-10 text-xl lg:text-2xl">
+            <div class="flex items-center space-x-2 bg-slate-800/80 px-4 py-2 rounded-xl border border-slate-700">
+                <span class="text-yellow-400">🏆 점수:</span>
+                <span id="scoreDisplay" class="font-bold text-yellow-300 min-w-[3rem] text-right">0</span>
+            </div>
+            <div class="flex items-center space-x-2 bg-slate-800/80 px-4 py-2 rounded-xl border border-slate-700">
+                <span class="text-red-400">❤️ 생명:</span>
+                <span id="livesDisplay" class="font-bold text-red-300 min-w-[2rem] text-center">3</span>
+            </div>
+            <div class="flex items-center space-x-2 bg-slate-800/80 px-4 py-2 rounded-xl border border-slate-700">
+                <span class="text-cyan-400">🚀 단계:</span>
+                <span id="stageDisplay" class="font-bold text-cyan-300 min-w-[2rem] text-center">1</span> / 3
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-3">
+            <button id="soundToggleBtn" onclick="toggleSound()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2.5 rounded-xl text-lg font-bold border border-slate-600 transition transform hover:scale-105 active:scale-95 shadow-lg">
+                🔊 사운드: 켜짐
+            </button>
+            <button id="pauseBtn" onclick="togglePause()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-xl text-lg font-bold transition transform hover:scale-105 active:scale-95 shadow-lg hidden">
+                ⏸ 일시정지 (스페이스)
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Game Area -->
+    <main class="w-full max-w-6xl my-4 flex flex-col items-center justify-center relative">
+        <div class="relative w-full aspect-[16/9] max-h-[72vh] bg-slate-950 rounded-2xl border-4 border-indigo-500/50 overflow-hidden box-glow shadow-2xl flex items-center justify-center">
+            
+            <!-- Canvas for Game Rendering -->
+            <canvas id="gameCanvas" class="w-full h-full block cursor-crosshair"></canvas>
+
+            <!-- Start / Overlay Screen Modal -->
+            <div id="modalOverlay" class="absolute inset-0 bg-slate-950/85 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center z-20">
+                <div id="modalContent" class="bg-slate-900 border-2 border-indigo-500/60 p-8 lg:p-10 rounded-3xl max-w-xl w-full box-glow shadow-2xl flex flex-col items-center space-y-6">
+                    <h2 id="modalTitle" class="text-3xl lg:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-pink-500 arcade-shadow">
+                        벽돌깨기 대모험에 오신 것을 환영합니다!
+                    </h2>
+                    <p id="modalDesc" class="text-lg lg:text-xl text-slate-300 leading-relaxed">
+                        방향키(←, →)나 마우스/터치패드로 바를 움직이고,<br>
+                        <b class="text-yellow-400">스페이스바</b>를 눌러 공을 발사하세요!<br>
+                        총 3단계를 모두 클리어해보세요!
+                    </p>
+                    <div id="modalExtra" class="text-sm text-indigo-300 bg-indigo-950/60 p-3 rounded-xl border border-indigo-800/50 w-full">
+                        💡 팁: 바의 끝부분에 맞히면 공이 더 날카롭게 꺾여요!
+                    </div>
+                    <button id="modalActionBtn" onclick="handleModalAction()" class="w-full py-4 bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white font-extrabold text-2xl rounded-2xl shadow-xl transition transform hover:scale-105 active:scale-95 border border-cyan-300/40">
+                        게임 시작하기 🚀
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Footer Controls / Guide -->
+    <footer class="w-full max-w-6xl bg-slate-900/60 backdrop-blur-md border border-slate-800 rounded-2xl p-4 flex flex-wrap items-center justify-around text-slate-400 text-base lg:text-lg gap-4 text-center">
+        <div class="flex items-center space-x-2">
+            <kbd class="px-3 py-1 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 font-mono">←</kbd>
+            <kbd class="px-3 py-1 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 font-mono">→</kbd>
+            <span>바 이동 (키보드)</span>
+        </div>
+        <div class="flex items-center space-x-2">
+            <kbd class="px-3 py-1 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 font-mono">마우스 / 터치</kbd>
+            <span>좌우 드래그 이동</span>
+        </div>
+        <div class="flex items-center space-x-2">
+            <kbd class="px-3 py-1 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 font-mono">Space</kbd>
+            <span>발사 / 일시정지</span>
+        </div>
+    </footer>
+
+    <!-- JavaScript Game Engine & Logic -->
+    <script>
+        // --- Sound Effects using Web Audio API ---
+        let audioCtx = null;
+        let soundEnabled = true;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function playSound(type) {
+            if (!soundEnabled) return;
+            try {
+                initAudio();
+                if (!audioCtx) return;
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                const now = audioCtx.currentTime;
+
+                if (type === 'paddle') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(320, now);
+                    osc.frequency.exponentialRampToValueAtTime(440, now + 0.08);
+                    gain.gain.setValueAtTime(0.15, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+                    osc.start(now);
+                    osc.stop(now + 0.08);
+                } else if (type === 'brick') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(500, now);
+                    osc.frequency.exponentialRampToValueAtTime(800, now + 0.1);
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                    osc.start(now);
+                    osc.stop(now + 0.1);
+                } else if (type === 'wall') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(220, now);
+                    gain.gain.setValueAtTime(0.1, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+                    osc.start(now);
+                    osc.stop(now + 0.05);
+                } else if (type === 'loss') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(200, now);
+                    osc.frequency.linearRampToValueAtTime(80, now + 0.4);
+                    gain.gain.setValueAtTime(0.25, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+                    osc.start(now);
+                    osc.stop(now + 0.4);
+                } else if (type === 'clear') {
+                    osc.type = 'sine';
+                    const notes = [523.25, 659.25, 783.99, 1046.50];
+                    notes.forEach((freq, idx) => {
+                        const noteOsc = audioCtx.createOscillator();
+                        const noteGain = audioCtx.createGain();
+                        noteOsc.connect(noteGain);
+                        noteGain.connect(audioCtx.destination);
+                        noteOsc.frequency.setValueAtTime(freq, now + idx * 0.12);
+                        noteGain.gain.setValueAtTime(0.2, now + idx * 0.12);
+                        noteGain.gain.exponentialRampToValueAtTime(0.01, now + idx * 0.12 + 0.2);
+                        noteOsc.start(now + idx * 0.12);
+                        noteOsc.stop(now + idx * 0.12 + 0.2);
+                    });
+                } else if (type === 'launch') {
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(300, now);
+                    osc.frequency.exponentialRampToValueAtTime(600, now + 0.15);
+                    gain.gain.setValueAtTime(0.15, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+                    osc.start(now);
+                    osc.stop(now + 0.15);
+                }
+            } catch (e) {
+                console.error("Audio error:", e);
+            }
+        }
+
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            const btn = document.getElementById('soundToggleBtn');
+            btn.textContent = soundEnabled ? "🔊 사운드: 켜짐" : "🔇 사운드: 꺼짐";
+        }
+
+        // --- Game Setup & State ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Logical internal canvas resolution for precise physics
+        const LOGICAL_WIDTH = 1200;
+        const LOGICAL_HEIGHT = 675; // 16:9 aspect ratio
+
+        canvas.width = LOGICAL_WIDTH;
+        canvas.height = LOGICAL_HEIGHT;
+
+        let gameState = 'START'; // 'START', 'READY', 'PLAYING', 'PAUSED', 'STAGE_CLEAR', 'GAME_OVER', 'GAME_CLEAR'
+        let score = 0;
+        let lives = 3;
+        let stage = 1;
+        let maxStages = 3;
+
+        // Paddle object
+        const paddle = {
+            width: 180,
+            height: 22,
+            x: (LOGICAL_WIDTH - 180) / 2,
+            y: LOGICAL_HEIGHT - 45,
+            dx: 0,
+            speed: 12,
+            isMovingLeft: false,
+            isMovingRight: false
+        };
+
+        // Ball object
+        const ball = {
+            x: LOGICAL_WIDTH / 2,
+            y: LOGICAL_HEIGHT - 70,
+            radius: 10,
+            speed: 6,
+            dx: 0,
+            dy: 0,
+            launched: false
+        };
+
+        // Bricks configuration
+        let bricks = [];
+        let brickRowCount = 4;
+        let brickColumnCount = 9;
+        let brickWidth = 112;
+        let brickHeight = 28;
+        let brickPadding = 14;
+        let brickOffsetTop = 60;
+        let brickOffsetLeft = 60;
+
+        // Particle effects system for visual juice
+        let particles = [];
+
+        function createParticles(x, y, color) {
+            for (let i = 0; i < 15; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    dx: (Math.random() - 0.5) * 8,
+                    dy: (Math.random() - 0.5) * 8,
+                    radius: Math.random() * 4 + 2,
+                    color: color,
+                    alpha: 1,
+                    decay: Math.random() * 0.03 + 0.02
+                });
+            }
+        }
+
+        function updateParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.x += p.dx;
+                p.y += p.dy;
+                p.alpha -= p.decay;
+                if (p.alpha <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+        }
+
+        function drawParticles() {
+            particles.forEach(p => {
+                ctx.save();
+                ctx.globalAlpha = p.alpha;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            });
+        }
+
+        // Initialize bricks based on current stage
+        function initBricks() {
+            bricks = [];
+            // Adjust row count or patterns based on stage
+            brickRowCount = 3 + stage; // Stage 1: 4 rows, Stage 2: 5 rows, Stage 3: 6 rows
+            
+            // Recalculate offset to center bricks
+            const totalWidthNeeded = brickColumnCount * (brickWidth + brickPadding) - brickPadding;
+            brickOffsetLeft = (LOGICAL_WIDTH - totalWidthNeeded) / 2;
+
+            for (let c = 0; c < brickColumnCount; c++) {
+                bricks[c] = [];
+                for (let r = 0; r < brickRowCount; r++) {
+                    // Stage specific toughness or colors
+                    let health = 1;
+                    if (stage === 2 && r === 0) health = 2; // Top row tougher in stage 2
+                    if (stage === 3 && (r === 0 || r === 1)) health = 2; // Top rows tougher in stage 3
+
+                    bricks[c][r] = {
+                        x: 0,
+                        y: 0,
+                        status: 1, // 1 = active, 0 = destroyed
+                        health: health,
+                        maxHealth: health
+                    };
+                }
+            }
+        }
+
+        // Reset ball and paddle for a new life / start
+        function resetPositions() {
+            paddle.width = Math.max(130, 180 - (stage - 1) * 20); // Paddle shrinks slightly in higher stages
+            paddle.x = (LOGICAL_WIDTH - paddle.width) / 2;
+            ball.x = paddle.x + paddle.width / 2;
+            ball.y = paddle.y - ball.radius - 5;
+            ball.dx = 0;
+            ball.dy = 0;
+            ball.launched = false;
+        }
+
+        // Start stage or restart game
+        function startNewGame() {
+            score = 0;
+            lives = 3;
+            stage = 1;
+            updateHUD();
+            initBricks();
+            resetPositions();
+            gameState = 'READY';
+            showModal("1단계 시작!", "스페이스바를 누르거나 화면을 클릭하여 공을 발사하세요!", "시작하기", startRound);
+        }
+
+        function startNextStage() {
+            stage++;
+            updateHUD();
+            initBricks();
+            resetPositions();
+            gameState = 'READY';
+            showModal(`${stage}단계 시작!`, `공 속도가 빨라집니다. 준비되셨나요?`, `${stage}단계 시작하기`, startRound);
+        }
+
+        function startRound() {
+            hideModal();
+            gameState = 'PLAYING';
+            launchBall();
+        }
+
+        function launchBall() {
+            if (ball.launched) return;
+            ball.launched = true;
+            // Base speed increases per stage
+            ball.speed = 6.5 + (stage - 1) * 1.2;
+            // Launch angle offset randomly towards left or right
+            const angle = (Math.random() * 0.6 - 0.3) - Math.PI / 2; // roughly upward
+            ball.dx = ball.speed * Math.cos(angle);
+            ball.dy = ball.speed * Math.sin(angle);
+            playSound('launch');
+            document.getElementById('pauseBtn').classList.remove('hidden');
+        }
+
+        function updateHUD() {
+            document.getElementById('scoreDisplay').textContent = score;
+            document.getElementById('livesDisplay').textContent = lives;
+            document.getElementById('stageDisplay').textContent = stage;
+        }
+
+        // Modal Handler UI and Action callback reference
+        let currentModalCallback = startNewGame;
+
+        function showModal(title, desc, btnText, callback) {
+            document.getElementById('modalTitle').textContent = title;
+            document.getElementById('modalDesc').innerHTML = desc;
+            const btn = document.getElementById('modalActionBtn');
+            btn.textContent = btnText;
+            if (callback) {
+                currentModalCallback = callback;
+            }
+            document.getElementById('modalOverlay').classList.remove('hidden');
+            document.getElementById('pauseBtn').classList.add('hidden');
+        }
+
+        function handleModalAction() {
+            if (typeof currentModalCallback === 'function') {
+                currentModalCallback();
+            }
+        }
+
+        function hideModal() {
+            document.getElementById('modalOverlay').classList.add('hidden');
+        }
+
+        function togglePause() {
+            if (gameState === 'PLAYING') {
+                gameState = 'PAUSED';
+                showModal("일시정지", "게임이 일시정지되었습니다.<br>계속하려면 아래 버튼을 누르세요.", "게임 재개", () => {
+                    hideModal();
+                    gameState = 'PLAYING';
+                    document.getElementById('pauseBtn').classList.remove('hidden');
+                });
+            } else if (gameState === 'PAUSED') {
+                hideModal();
+                gameState = 'PLAYING';
+                document.getElementById('pauseBtn').classList.remove('hidden');
+            }
+        }
+
+        // --- Keyboard and Mouse Input Controls ---
+        const keys = {};
+
+        window.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+
+            if (e.code === 'Space') {
+                e.preventDefault();
+                if (gameState === 'READY') {
+                    startRound();
+                } else if (gameState === 'PLAYING') {
+                    togglePause();
+                } else if (gameState === 'PAUSED') {
+                    togglePause();
+                }
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+        });
+
+        // Mouse / Touch movement relative to canvas
+        function handlePointerMove(clientX) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = LOGICAL_WIDTH / rect.width;
+            const relativeX = (clientX - rect.left) * scaleX;
+            if (relativeX >= 0 && relativeX <= LOGICAL_WIDTH) {
+                paddle.x = relativeX - paddle.width / 2;
+                // Clamp within bounds
+                if (paddle.x < 0) paddle.x = 0;
+                if (paddle.x + paddle.width > LOGICAL_WIDTH) paddle.x = LOGICAL_WIDTH - paddle.width;
+
+                // If ball not launched, move ball with paddle
+                if (!ball.launched) {
+                    ball.x = paddle.x + paddle.width / 2;
+                }
+            }
+        }
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (gameState === 'PLAYING' || gameState === 'READY') {
+                handlePointerMove(e.clientX);
+            }
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            if (e.touches.length > 0) {
+                if (gameState === 'PLAYING' || gameState === 'READY') {
+                    handlePointerMove(e.touches[0].clientX);
+                }
+            }
+        }, { passive: true });
+
+        canvas.addEventListener('click', () => {
+            if (gameState === 'READY') {
+                startRound();
+            }
+        });
+
+        canvas.addEventListener('touchstart', (e) => {
+            if (gameState === 'READY') {
+                startRound();
+            }
+        }, { passive: true });
+
+        // --- Collision Detection & Game Logic Loop ---
+        function collisionDetection() {
+            for (let c = 0; c < brickColumnCount; c++) {
+                for (let r = 0; r < brickRowCount; r++) {
+                    let b = bricks[c][r];
+                    if (b.status === 1) {
+                        // Check bounding box intersection with ball
+                        if (
+                            ball.x + ball.radius > b.x &&
+                            ball.x - ball.radius < b.x + brickWidth &&
+                            ball.y + ball.radius > b.y &&
+                            ball.y - ball.radius < b.y + brickHeight
+                        ) {
+                            ball.dy = -ball.dy;
+                            b.health--;
+
+                            createParticles(b.x + brickWidth / 2, b.y + brickHeight / 2, getBrickColor(r, b.health));
+
+                            if (b.health <= 0) {
+                                b.status = 0;
+                                score += 10;
+                                updateHUD();
+                                playSound('brick');
+                            } else {
+                                playSound('wall');
+                            }
+
+                            // Check if all bricks cleared
+                            if (checkWinCondition()) {
+                                handleStageClear();
+                            }
+                            return; // Handle one collision per frame to prevent glitching
+                        }
+                    }
+                }
+            }
+        }
+
+        function checkWinCondition() {
+            for (let c = 0; c < brickColumnCount; c++) {
+                for (let r = 0; r < brickRowCount; r++) {
+                    if (bricks[c][r].status === 1) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        function handleStageClear() {
+            if (stage < maxStages) {
+                gameState = 'STAGE_CLEAR';
+                playSound('clear');
+                showModal(`${stage}단계 클리어! 🎉`, `대단해요! 모든 벽돌을 깨부수셨습니다.<br>다음 단계로 도전하시겠습니까?`, `다음 단계(${stage + 1}단계)로!`, startNextStage);
+            } else {
+                gameState = 'GAME_CLEAR';
+                playSound('clear');
+                showModal(`🏆 GAME CLEAR! 🏆`, `축하합니다! 3단계 최종 마스터를 달성하셨습니다!<br>총 점수: <b class="text-yellow-400 text-2xl">${score}점</b>`, `처음부터 다시 하기`, startNewGame);
+            }
+        }
+
+        function handleGameOver() {
+            gameState = 'GAME_OVER';
+            playSound('loss');
+            showModal(`GAME OVER 😢`, `아쉽습니다! 생명이 모두 소모되었습니다.<br>최종 점수: <b class="text-yellow-400 text-2xl">${score}점</b>`, `다시 도전하기`, startNewGame);
+        }
+
+        function update() {
+            if (gameState !== 'PLAYING') return;
+
+            // Keyboard paddle movement
+            if (keys['ArrowLeft'] || keys['KeyA']) {
+                paddle.x -= paddle.speed;
+                if (paddle.x < 0) paddle.x = 0;
+            }
+            if (keys['ArrowRight'] || keys['KeyD']) {
+                paddle.x += paddle.speed;
+                if (paddle.x + paddle.width > LOGICAL_WIDTH) paddle.x = LOGICAL_WIDTH - paddle.width;
+            }
+
+            if (!ball.launched) {
+                ball.x = paddle.x + paddle.width / 2;
+                return;
+            }
+
+            // Move ball
+            ball.x += ball.dx;
+            ball.y += ball.dy;
+
+            // Wall collisions (Left / Right)
+            if (ball.x - ball.radius < 0) {
+                ball.x = ball.radius;
+                ball.dx = -ball.dx;
+                playSound('wall');
+            } else if (ball.x + ball.radius > LOGICAL_WIDTH) {
+                ball.x = LOGICAL_WIDTH - ball.radius;
+                ball.dx = -ball.dx;
+                playSound('wall');
+            }
+
+            // Wall collision (Top)
+            if (ball.y - ball.radius < 0) {
+                ball.y = ball.radius;
+                ball.dy = -ball.dy;
+                playSound('wall');
+            }
+
+            // Paddle collision
+            if (
+                ball.y + ball.radius >= paddle.y &&
+                ball.y - ball.radius <= paddle.y + paddle.height &&
+                ball.x >= paddle.x &&
+                ball.x <= paddle.x + paddle.width
+            ) {
+                // Calculate reflection angle based on where it hit the paddle
+                let hitPoint = ball.x - (paddle.x + paddle.width / 2);
+                // Normalize between -1 and 1
+                hitPoint = hitPoint / (paddle.width / 2);
+
+                const maxAngle = Math.PI / 3; // 60 degrees max
+                const bounceAngle = hitPoint * maxAngle;
+
+                ball.speed = Math.min(15, ball.speed + 0.1); // Slight speed up on paddle hit
+                ball.dx = ball.speed * Math.sin(bounceAngle);
+                ball.dy = -Math.abs(ball.speed * Math.cos(bounceAngle)); // Always bounce upward
+
+                // Prevent sticking inside paddle
+                ball.y = paddle.y - ball.radius;
+                playSound('paddle');
+                createParticles(ball.x, ball.y, '#38bdf8');
+            }
+
+            // Brick collisions
+            collisionDetection();
+
+            // Bottom collision (Lose life)
+            if (ball.y - ball.radius > LOGICAL_HEIGHT) {
+                lives--;
+                updateHUD();
+                playSound('loss');
+                createParticles(ball.x, LOGICAL_HEIGHT - 20, '#f43f5e');
+
+                if (lives <= 0) {
+                    handleGameOver();
+                } else {
+                    resetPositions();
+                    gameState = 'READY';
+                    showModal("생명 손실!", `남은 생명: ${lives}개<br>준비되면 스페이스바나 버튼을 누르세요.`, "계속하기", startRound);
+                }
+            }
+
+            updateParticles();
+        }
+
+        // --- Render Graphics ---
+        function getBrickColor(row, health) {
+            const colors = [
+                ['#f43f5e', '#fb7185'], // Red
+                ['#f97316', '#fb923c'], // Orange
+                ['#eab308', '#facc15'], // Yellow
+                ['#22c55e', '#4ade80'], // Green
+                ['#06b6d4', '#22d3ee'], // Cyan
+                ['#a855f7', '#c084fc']  // Purple
+            ];
+            let colorSet = colors[row % colors.length];
+            return health > 1 ? '#cbd5e1' : colorSet[0];
+        }
+
+        function draw() {
+            // Clear canvas
+            ctx.clearRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
+
+            // Draw Background Grid / Stars or subtle decoration
+            ctx.fillStyle = '#020617';
+            ctx.fillRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
+
+            // Draw Bricks
+            for (let c = 0; c < brickColumnCount; c++) {
+                for (let r = 0; r < brickRowCount; r++) {
+                    let b = bricks[c][r];
+                    if (b.status === 1) {
+                        b.x = brickOffsetLeft + c * (brickWidth + brickPadding);
+                        b.y = brickOffsetTop + r * (brickHeight + brickPadding);
+
+                        ctx.save();
+                        // Rounded rectangle for brick
+                        ctx.fillStyle = getBrickColor(r, b.health);
+                        ctx.shadowColor = ctx.fillStyle;
+                        ctx.shadowBlur = 10;
+                        
+                        ctx.beginPath();
+                        ctx.roundRect(b.x, b.y, brickWidth, brickHeight, 8);
+                        ctx.fill();
+
+                        // Inner gloss
+                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+
+                        // If multi-hit brick, show health indicator
+                        if (b.maxHealth > 1) {
+                            ctx.fillStyle = '#0f172a';
+                            ctx.font = 'bold 14px Jua';
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle';
+                            ctx.fillText(b.health, b.x + brickWidth / 2, b.y + brickHeight / 2);
+                        }
+
+                        ctx.restore();
+                    }
+                }
+            }
+
+            // Draw Paddle
+            ctx.save();
+            ctx.fillStyle = '#38bdf8';
+            ctx.shadowColor = '#38bdf8';
+            ctx.shadowBlur = 15;
+            ctx.beginPath();
+            ctx.roundRect(paddle.x, paddle.y, paddle.width, paddle.height, 12);
+            ctx.fill();
+            
+            // Paddle highlight
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.beginPath();
+            ctx.roundRect(paddle.x + 8, paddle.y + 3, paddle.width - 16, 5, 4);
+            ctx.fill();
+            ctx.restore();
+
+            // Draw Ball
+            ctx.save();
+            ctx.fillStyle = '#f43f5e';
+            ctx.shadowColor = '#f43f5e';
+            ctx.shadowBlur = 18;
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Ball inner highlight
+            ctx.fillStyle = '#ffe4e6';
+            ctx.beginPath();
+            ctx.arc(ball.x - 3, ball.y - 3, ball.radius * 0.35, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+
+            // Draw Particles
+            drawParticles();
+        }
+
+        // --- Main Game Loop ---
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Initialize on window load
+        window.onload = function() {
+            updateHUD();
+            initBricks();
+            resetPositions();
+            // Start the render loop
+            requestAnimationFrame(gameLoop);
+        };
+    </script>
+</body>
+</html>
